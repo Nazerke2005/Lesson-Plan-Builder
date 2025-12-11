@@ -14,33 +14,38 @@ struct AnimatedBackground: View {
     @State private var t3: CGFloat = 0
 
     var body: some View {
-        ZStack {
-            // Базовый мягкий фон (как в приложении)
-            LinearGradient(
-                colors: [
-                    Color.secondary.opacity(0.08),
-                    Color.secondary.opacity(0.08)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+        GeometryReader { proxy in
+            let size = proxy.size
+
+            ZStack {
+                // Базовый мягкий фон
+                LinearGradient(
+                    colors: [
+                        Color.secondary.opacity(0.08),
+                        Color.secondary.opacity(0.08)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+
+                // Плавающие «пузыри»
+                bubble(color: .blue.opacity(0.35),
+                       size: 260,
+                       x: size.width * (0.15 + 0.05 * sin(t1)),
+                       y: size.height * (0.22 + 0.04 * cos(t1)))
+
+                bubble(color: .purple.opacity(0.30),
+                       size: 300,
+                       x: size.width * (0.82 + 0.04 * cos(t2)),
+                       y: size.height * (0.18 + 0.05 * sin(t2)))
+
+                bubble(color: .pink.opacity(0.28),
+                       size: 220,
+                       x: size.width * (0.25 + 0.06 * sin(t3)),
+                       y: size.height * (0.80 + 0.05 * cos(t3)))
+            }
+            .frame(width: size.width, height: size.height)
             .ignoresSafeArea()
-
-            // Плавающие «пузыри»
-            bubble(color: .blue.opacity(0.35),
-                   size: 260,
-                   x: 0.15 + 0.05 * sin(t1),
-                   y: 0.22 + 0.04 * cos(t1))
-
-            bubble(color: .purple.opacity(0.30),
-                   size: 300,
-                   x: 0.82 + 0.04 * cos(t2),
-                   y: 0.18 + 0.05 * sin(t2))
-
-            bubble(color: .pink.opacity(0.28),
-                   size: 220,
-                   x: 0.25 + 0.06 * sin(t3),
-                   y: 0.80 + 0.05 * cos(t3))
         }
         .onAppear {
             withAnimation(.linear(duration: 14).repeatForever(autoreverses: false)) {
@@ -65,8 +70,7 @@ struct AnimatedBackground: View {
             )
             .blur(radius: 24)
             .frame(width: size, height: size)
-            .position(x: UIScreen.main.bounds.width * x,
-                      y: UIScreen.main.bounds.height * y)
+            .position(x: x, y: y)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }

@@ -29,6 +29,15 @@ struct ContentView: View {
     // Имя пользователя из профиля
     @AppStorage("profile.fullName") private var fullName: String = "Нәзерке Турғанбек"
 
+    // Auth flow flags (для выхода через бургер)
+    @AppStorage("auth.isOnboarded") private var isOnboarded: Bool = false
+    @AppStorage("auth.showLogin") private var showLogin: Bool = false
+
+    // Профильные данные, чтобы очистить при выходе
+    @AppStorage("profile.role") private var role: String = "Мұғалім"
+    @AppStorage("profile.school") private var school: String = "№12 мектеп-лицей"
+    @AppStorage("profile.email") private var email: String = "user@example.com"
+
     private var filteredLessons: [Lesson] {
         guard !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return lessons
@@ -48,17 +57,7 @@ struct ContentView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
             }
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color.secondary.opacity(0.08),
-                        Color.secondary.opacity(0.08)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-            )
+            .background(Color.clear.ignoresSafeArea())
             .navigationTitle("")
             #if os(macOS)
             .navigationTitle("")
@@ -77,16 +76,18 @@ struct ContentView: View {
                 #endif
             }
             .sheet(isPresented: $showingNewLesson) {
-                NewLessonView { title, date, notes in
-                    let new = Lesson(title: title, date: date, notes: notes)
+                NewLessonView { title, date, notes, attachments in
+                    let new = Lesson(title: title, date: date, notes: notes, attachments: attachments)
                     modelContext.insert(new)
+                    try? modelContext.save()
                 }
                 .presentationDetents([.medium, .large])
             }
             .sheet(isPresented: $aiSheetPresented) {
                 AIAssistView { prompt in
                     do {
-                        return try await OpenAIClient().generateAnswer(prompt: prompt)
+                        let client = try GeminiClient(model: "gemini-1.5-flash")
+                        return try await client.generateAnswer(prompt: prompt)
                     } catch {
                         return "Қате: \(error.localizedDescription)"
                     }
@@ -97,16 +98,18 @@ struct ContentView: View {
                 ProfileView()
                     .presentationDetents([.large])
             }
-            // Полноэкранное меню
             .fullScreenCover(isPresented: $isMenuOpen) {
                 FullscreenMenuView(
                     isPresented: $isMenuOpen,
                     openAISheet: { aiSheetPresented = true },
                     openNewLesson: { showingNewLesson = true },
-                    openProfile: { showProfileSheet = true }
+                    openProfile: { showProfileSheet = true },
+                    onSignOut: { signOutFromMenu() }
                 )
                 .transition(.opacity)
             }
+            .toolbarBackground(.clear, for: .navigationBar)
+            .toolbarBackgroundVisibility(.visible, for: .navigationBar)
         }
     }
 
@@ -136,14 +139,12 @@ struct ContentView: View {
     private var header: some View {
         HStack(alignment: .center, spacing: 12) {
             Button {
-                // Открываем профиль по нажатию на аватар
                 showProfileSheet = true
             } label: {
                 avatarOrPlaceholder
             }
             .buttonStyle(.plain)
 
-            // Приветствие и имя пользователя
             VStack(alignment: .leading, spacing: 2) {
                 Text("Сәлем,")
                     .font(.subheadline)
@@ -165,7 +166,7 @@ struct ContentView: View {
             image
                 .resizable()
                 .scaledToFill()
-                .frame(width: 40, height: 40) // увеличенный аватар
+                .frame(width: 40, height: 40)
                 .clipShape(Circle())
                 .overlay(
                     Circle().stroke(.white.opacity(0.6), lineWidth: 1)
@@ -173,7 +174,6 @@ struct ContentView: View {
                 .shadow(color: .black.opacity(0.08), radius: 3, x: 0, y: 2)
                 .accessibilityLabel("Профиль")
         } else {
-            // Фолбэк до установки аватарки
             Circle()
                 .fill(LinearGradient(colors: [.blue, .purple, .pink], startPoint: .topLeading, endPoint: .bottomTrailing))
                 .frame(width: 40, height: 40)
@@ -188,7 +188,7 @@ struct ContentView: View {
 
     private func firstName(from fullName: String) -> String {
         let trimmed = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return String(localized: "guest") } // локализуемое "Гость"/"Қонақ"/"Guest"
+        guard !trimmed.isEmpty else { return String(localized: "guest") }
         let parts = trimmed.split(separator: " ")
         if let first = parts.first {
             return String(first)
@@ -251,6 +251,19 @@ struct ContentView: View {
         .padding(14)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
+
+    // MARK: - Sign out (burger menu)
+
+    private func signOutFromMenu() {
+        isOnboarded = false
+        showLogin = false
+        KeychainStorage.deletePassword(for: email)
+        fullName = ""
+        role = "Мұғалім"
+        school = ""
+        email = ""
+        profileManager.setAvatar(data: nil)
+    }
 }
 
 // MARK: - Fullscreen menu view
@@ -262,20 +275,13 @@ private struct FullscreenMenuView: View {
     var openAISheet: () -> Void
     var openNewLesson: () -> Void
     var openProfile: () -> Void
+    var onSignOut: () -> Void
 
     @State private var appear: Bool = false
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color.secondary.opacity(0.08),
-                    Color.secondary.opacity(0.08)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            Color.clear.ignoresSafeArea()
 
             VStack(spacing: 16) {
                 HStack {
@@ -318,6 +324,7 @@ private struct FullscreenMenuView: View {
                     Divider().background(.secondary.opacity(0.3))
 
                     DestructiveMaterialButton(title: "Шығу", systemImage: "rectangle.portrait.and.arrow.right") {
+                        onSignOut()
                         close()
                     }
                 }
@@ -362,8 +369,6 @@ private struct AIAssistView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-
-                    // Prompt input — material card
                     materialCard {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Сұрағыңыз")
@@ -380,7 +385,6 @@ private struct AIAssistView: View {
                         }
                     }
 
-                    // Generate button styled like GradientButton
                     Button {
                         Task {
                             guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -410,7 +414,6 @@ private struct AIAssistView: View {
                     .buttonStyle(.plain)
                     .disabled(isLoading)
 
-                    // Answer display — material card
                     materialCard {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Жауап")
@@ -431,27 +434,18 @@ private struct AIAssistView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
             }
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color.secondary.opacity(0.08),
-                        Color.secondary.opacity(0.08)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-            )
+            .background(Color.clear.ignoresSafeArea())
             .navigationTitle("AI көмекші")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Жабу") { dismiss() }
                 }
             }
+            .toolbarBackground(.clear, for: .navigationBar)
+            .toolbarBackgroundVisibility(.visible, for: .navigationBar)
         }
     }
 
-    // Material card helper (match main page)
     @ViewBuilder
     private func materialCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 12) {

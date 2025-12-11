@@ -16,22 +16,18 @@ struct LoginView: View {
     @State private var isSubmitting: Bool = false
     @State private var errorMessage: String?
 
-    // Маркеры состояния
+    // Навигационные флаги
     @AppStorage("auth.isOnboarded") private var isOnboarded: Bool = false
     @AppStorage("auth.showLogin") private var showLogin: Bool = true
 
-    // Для совместимости с текущим UI профиля
+    // Для совместимости с текущим UI
     @AppStorage("profile.fullName") private var storedFullName: String = ""
     @AppStorage("profile.school") private var storedSchool: String = ""
     @AppStorage("profile.email") private var storedEmail: String = ""
     @AppStorage("profile.role") private var storedRole: String = "Мұғалім"
 
-    // Вытащим пользователей, чтобы проверить наличие email
+    // Пользователи для проверки email
     @Query private var users: [User]
-
-    init() {
-        // Пустой init, @Query заполнится автоматически
-    }
 
     var body: some View {
         NavigationStack {
@@ -48,9 +44,11 @@ struct LoginView: View {
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
                                 .textContentType(.username)
+                                .submitLabel(.next)
 
                             SecureField("Құпиясөз", text: $password)
                                 .textContentType(.password)
+                                .submitLabel(.done)
                         }
                     }
 
@@ -82,7 +80,6 @@ struct LoginView: View {
                     .buttonStyle(.plain)
                     .disabled(!isFormValid || isSubmitting)
 
-                    // Перейти к регистрации
                     Button {
                         showLogin = false
                     } label: {
@@ -93,21 +90,17 @@ struct LoginView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
+                .frame(maxWidth: 560)
+                .frame(maxWidth: .infinity)
             }
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color.secondary.opacity(0.08),
-                        Color.secondary.opacity(0.08)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-            )
+            .background(Color.clear.ignoresSafeArea())
             .navigationTitle("Қайта оралу")
+            .toolbarBackground(.clear, for: .navigationBar)
+            .toolbarBackgroundVisibility(.visible, for: .navigationBar)
         }
     }
+
+    // MARK: - Helpers
 
     private var isFormValid: Bool {
         isValidEmail(email) && password.count >= 6
@@ -137,13 +130,11 @@ struct LoginView: View {
 
         let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
-        // Проверяем, что такой пользователь есть
         guard let user = users.first(where: { $0.email.lowercased() == normalizedEmail }) else {
             errorMessage = "Пайдаланушы табылмады."
             return
         }
 
-        // Проверяем пароль в Keychain
         do {
             guard let storedPassword = try KeychainStorage.loadPassword(for: normalizedEmail) else {
                 errorMessage = "Құпиясөз табылмады."
@@ -158,12 +149,15 @@ struct LoginView: View {
             return
         }
 
-        // Синхронизируем AppStorage для текущего UI
         storedFullName = user.fullName
         storedSchool = user.school
         storedEmail = user.email
 
-        // Авторизуем
         isOnboarded = true
     }
+}
+
+#Preview {
+    LoginView()
+        .modelContainer(for: [Item.self, Lesson.self, User.self], inMemory: true)
 }

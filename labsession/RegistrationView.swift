@@ -18,90 +18,109 @@ struct RegistrationView: View {
     @State private var email: String = ""
     @State private var password: String = ""
 
-    // Валидация/состояние
+    // Состояние
     @State private var isSubmitting: Bool = false
     @State private var errorMessage: String?
 
-    // Флаг завершения регистрации
+    // Флаги навигации
     @AppStorage("auth.isOnboarded") private var isOnboarded: Bool = false
+    @AppStorage("auth.showLogin") private var showLogin: Bool = false
 
-    // Для совместимости с текущими экранами профиля
+    // Для совместимости с текущим UI профиля
     @AppStorage("profile.fullName") private var storedFullName: String = ""
     @AppStorage("profile.school") private var storedSchool: String = ""
     @AppStorage("profile.email") private var storedEmail: String = ""
     @AppStorage("profile.role") private var storedRole: String = "Мұғалім"
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    Text("Тіркелу")
-                        .font(.system(size: 28, weight: .bold))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+        ZStack {
+            // Локальный нежно‑розовый анимированный фон ТОЛЬКО для регистрации
+            PinkAnimatedBackground()
 
-                    materialCard {
-                        VStack(spacing: 12) {
-                            TextField("Аты", text: $firstName)
-                                .textContentType(.givenName)
-                            TextField("Тегі", text: $lastName)
-                                .textContentType(.familyName)
-                            TextField("Мектеп", text: $school)
-                                .textContentType(.organizationName)
-                            TextField("Email", text: $email)
-                                .keyboardType(.emailAddress)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                                .textContentType(.emailAddress)
-                            SecureField("Құпиясөз", text: $password)
-                                .textContentType(.newPassword)
-                        }
-                    }
-
-                    if let msg = errorMessage {
-                        Text(msg)
-                            .foregroundStyle(.red)
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: 16) {
+                        Text("Тіркелу")
+                            .font(.system(size: 28, weight: .bold))
                             .frame(maxWidth: .infinity, alignment: .leading)
-                    }
 
-                    Button {
-                        Task { await submit() }
-                    } label: {
-                        HStack {
-                            if isSubmitting { ProgressView().tint(.white) }
-                            Text(isSubmitting ? "Сақталуда…" : "Тіркелу")
-                                .font(.system(size: 17, weight: .semibold))
+                        materialCard {
+                            VStack(spacing: 12) {
+                                TextField("Аты", text: $firstName)
+                                    .textContentType(.givenName)
+                                    .submitLabel(.next)
+
+                                TextField("Тегі", text: $lastName)
+                                    .textContentType(.familyName)
+                                    .submitLabel(.next)
+
+                                TextField("Мектеп", text: $school)
+                                    .textContentType(.organizationName)
+                                    .submitLabel(.next)
+
+                                TextField("Email", text: $email)
+                                    .keyboardType(.emailAddress)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .textContentType(.emailAddress)
+                                    .submitLabel(.next)
+
+                                SecureField("Құпиясөз (мин. 6 таңба)", text: $password)
+                                    .textContentType(.newPassword)
+                                    .submitLabel(.done)
+                            }
                         }
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(
-                            LinearGradient(colors: [.blue, .purple, .pink],
-                                           startPoint: .topLeading,
-                                           endPoint: .bottomTrailing),
-                            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        )
-                        .opacity(isFormValid ? 1 : 0.6)
+
+                        if let msg = errorMessage {
+                            Text(msg)
+                                .foregroundStyle(.red)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+
+                        Button {
+                            Task { await submit() }
+                        } label: {
+                            HStack {
+                                if isSubmitting { ProgressView().tint(.white) }
+                                Text(isSubmitting ? "Сақталуда…" : "Тіркелу")
+                                    .font(.system(size: 17, weight: .semibold))
+                            }
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                LinearGradient(colors: [.blue, .purple, .pink],
+                                               startPoint: .topLeading,
+                                               endPoint: .bottomTrailing),
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            )
+                            .opacity(isFormValid ? 1 : 0.6)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!isFormValid || isSubmitting)
+
+                        Button {
+                            showLogin = true
+                        } label: {
+                            Text("Есептік жазбаңыз бар ма? Кіру")
+                                .foregroundStyle(.primary)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(!isFormValid || isSubmitting)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    .frame(maxWidth: 560)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
+                .background(Color.clear.ignoresSafeArea())
+                .navigationTitle("Қош келдіңіз")
+                .toolbarBackground(.clear, for: .navigationBar)
+                .toolbarBackgroundVisibility(.visible, for: .navigationBar)
             }
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color.secondary.opacity(0.08),
-                        Color.secondary.opacity(0.08)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-            )
-            .navigationTitle("Қош келдіңіз")
         }
     }
+
+    // MARK: - Helpers
 
     private var isFormValid: Bool {
         !firstName.trimmingCharacters(in: .whitespaces).isEmpty &&
@@ -114,10 +133,10 @@ struct RegistrationView: View {
     private func isValidEmail(_ s: String) -> Bool {
         let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
-        // Простая проверка
         return trimmed.contains("@") && trimmed.contains(".")
     }
 
+    @ViewBuilder
     private func materialCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             content()
@@ -134,11 +153,12 @@ struct RegistrationView: View {
         isSubmitting = true
         defer { isSubmitting = false }
 
-        // Создаём пользователя и сохраняем в SwiftData
-        let user = User(firstName: firstName.trimmingCharacters(in: .whitespaces),
-                        lastName: lastName.trimmingCharacters(in: .whitespaces),
-                        school: school.trimmingCharacters(in: .whitespaces),
-                        email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+        let user = User(
+            firstName: firstName.trimmingCharacters(in: .whitespaces),
+            lastName: lastName.trimmingCharacters(in: .whitespaces),
+            school: school.trimmingCharacters(in: .whitespaces),
+            email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        )
         modelContext.insert(user)
 
         do {
@@ -148,23 +168,22 @@ struct RegistrationView: View {
             return
         }
 
-        // Сохраняем пароль в Keychain
         do {
             try KeychainStorage.savePassword(password, for: user.email)
         } catch {
             errorMessage = "Құпиясөзді сақтау қатесі: \(error.localizedDescription)"
-            // При желании можно откатить вставку пользователя
             return
         }
 
-        // Синхронизируем AppStorage для совместимости текущего UI
         storedFullName = user.fullName
         storedSchool = user.school
         storedEmail = user.email
-        // role у вас уже по умолчанию "Мұғалім"
-        // storedRole = "Мұғалім"
 
-        // Отмечаем, что онбординг завершён
         isOnboarded = true
     }
+}
+
+#Preview {
+    RegistrationView()
+        .modelContainer(for: [Item.self, Lesson.self, User.self], inMemory: true)
 }

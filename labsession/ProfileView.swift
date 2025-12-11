@@ -19,13 +19,17 @@ struct ProfileView: View {
     @AppStorage("profile.email") private var email: String = "user@example.com"
 
     // Settings
-    @AppStorage("app.theme") private var theme: Int = 0 // 0 system, 1 light, 2 dark
+    @AppStorage("app.theme") private var theme: Int = 0
     @AppStorage("app.language") private var language: String = "kk"
 
     @State private var isEditingProfile: Bool = false
     @AppStorage("profile.notificationsEnabled") private var notificationsEnabled: Bool = true
     @AppStorage("profile.biometricEnabled") private var biometricEnabled: Bool = false
     @State private var showSignOutConfirm: Bool = false
+
+    // Auth flow flags
+    @AppStorage("auth.isOnboarded") private var isOnboarded: Bool = false
+    @AppStorage("auth.showLogin") private var showLogin: Bool = false
 
     // For PhotosPicker
     @State private var avatarPickerItem: PhotosPickerItem? = nil
@@ -37,7 +41,6 @@ struct ProfileView: View {
                 VStack(spacing: 16) {
                     headerCard
 
-                    // Quick actions in gradient style
                     VStack(spacing: 12) {
                         GradientButton(title: "Профильді өңдеу", systemImage: "pencil", gradient: [.blue, .purple, .pink]) {
                             isEditingProfile = true
@@ -50,7 +53,6 @@ struct ProfileView: View {
                         }
                     }
 
-                    // Account info card
                     materialCard {
                         VStack(alignment: .leading, spacing: 10) {
                             labeledRow("Аты-жөні", value: fullName)
@@ -60,7 +62,6 @@ struct ProfileView: View {
                         }
                     }
 
-                    // Settings card
                     materialCard {
                         VStack(spacing: 12) {
                             HStack {
@@ -112,24 +113,19 @@ struct ProfileView: View {
                         }
                     }
 
-                    // Support / About
                     materialCard {
                         VStack(spacing: 12) {
                             linkRow(title: "Көмек және кері байланыс", systemImage: "questionmark.circle") {
-                                // Open support
                             }
                             Divider().background(.secondary.opacity(0.2))
                             linkRow(title: "Құпиялылық саясаты", systemImage: "hand.raised") {
-                                // Open privacy
                             }
                             Divider().background(.secondary.opacity(0.2))
                             linkRow(title: "Қолданба туралы", systemImage: "info.circle") {
-                                // Open about
                             }
                         }
                     }
 
-                    // Sign out
                     DestructiveMaterialButton(title: "Шығу", systemImage: "rectangle.portrait.and.arrow.right") {
                         showSignOutConfirm = true
                     }
@@ -137,23 +133,15 @@ struct ProfileView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
             }
-            .background(
-                LinearGradient(
-                    colors: [
-                        Color.secondary.opacity(0.08),
-                        Color.secondary.opacity(0.08)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-            )
+            .background(Color.clear.ignoresSafeArea())
             .navigationTitle("Профиль")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Жабу") { dismiss() }
                 }
             }
+            .toolbarBackground(.clear, for: .navigationBar)
+            .toolbarBackgroundVisibility(.visible, for: .navigationBar)
             .sheet(isPresented: $isEditingProfile) {
                 EditProfileSheet(
                     fullName: $fullName,
@@ -166,8 +154,7 @@ struct ProfileView: View {
             .alert("Шығу", isPresented: $showSignOutConfirm) {
                 Button("Болдырмау", role: .cancel) {}
                 Button("Шығу", role: .destructive) {
-                    // Perform sign out
-                    dismiss()
+                    signOut()
                 }
             } message: {
                 Text("Ақпаратыңыз сақталады. Шығуды растаңыз.")
@@ -187,7 +174,6 @@ struct ProfileView: View {
 // MARK: - Helpers inside ProfileView
 
 private extension ProfileView {
-    // Header card with avatar and main info, with avatar edit button
     var headerCard: some View {
         materialCard {
             HStack(spacing: 14) {
@@ -248,7 +234,6 @@ private extension ProfileView {
         }
     }
 
-    // Reusable material card container
     @ViewBuilder
     func materialCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -259,7 +244,6 @@ private extension ProfileView {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    // Labeled key/value row
     @ViewBuilder
     func labeledRow(_ title: String, value: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
@@ -272,7 +256,6 @@ private extension ProfileView {
         .font(.system(size: 16))
     }
 
-    // Link-styled row with chevron
     @ViewBuilder
     func linkRow(title: String, systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -291,7 +274,6 @@ private extension ProfileView {
         .buttonStyle(.plain)
     }
 
-    // Simple initials avatar
     func avatarView(initials: String) -> some View {
         ZStack {
             Circle()
@@ -310,6 +292,18 @@ private extension ProfileView {
         let first = parts.first?.first.map { String($0) } ?? ""
         let second = parts.dropFirst().first?.first.map { String($0) } ?? ""
         return (first + second).uppercased()
+    }
+
+    func signOut() {
+        isOnboarded = false
+        showLogin = false
+        KeychainStorage.deletePassword(for: email)
+        fullName = ""
+        role = "Мұғалім"
+        school = ""
+        email = ""
+        profileManager.setAvatar(data: nil)
+        dismiss()
     }
 }
 
